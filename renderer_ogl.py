@@ -100,6 +100,11 @@ class OpenGLRenderer:
         self.pos_array = np.empty((0, 3), dtype=np.float32)
         self.col_array = np.empty((0, 3), dtype=np.float32)
         
+        # Phase 2: Infinite Canvas (Spatial Hashing)
+        self.chunks = {}
+        self.chunk_size = 5.0
+        self.voxels_count = 0
+        
         # Navigation (Infinite Canvas)
         self.cam_pos = [0.0, 0.0, 0.0] # X, Y, Z
         self.target_cam_pos = [0.0, 0.0, 0.0] # Smooth Zoom Target
