@@ -25,30 +25,97 @@ class HandTracker:
         
         # Filters: Key = "Left" or "Right"
         self.filters = {
-            "Left": PointFilter(min_cutoff=1.0, beta=10.0),  # OPTIMUS: β=10 for smoother tracking
-            "Right": PointFilter(min_cutoff=1.0, beta=10.0)
+            "Left": PointFilter(min_cutoff=0.5, beta=10.0),  # Reduced min_cutoff for smoother hovering
+            "Right": PointFilter(min_cutoff=0.5, beta=10.0)
         }
         
         # Tip Indices (Thumb, Index)
         self.tip_ids = [4, 8]
+        
+        # Hysteresis State: {label: {finger: is_pinching}}
+        self.pinch_states = {
+            "Left": {'index': False, 'middle': False, 'ring': False, 'pinky': False},
+            "Right": {'index': False, 'middle': False, 'ring': False, 'pinky': False}
+        }
     
     def get_smooth_pos(self, index_tip_raw, label="Right"):
-        """
-        Returns smoothed (x, y, z) for index tip using OneEuroFilter.
-        OPTIMIZED: Now uses full 3D filtering (X, Y, Z all smoothed).
-        """
+        # ... (logic remains same, just ensuring changes didn't break this)
+        # Use existing logic but rely on updated self.filters
+        # ...
         import time
         x = index_tip_raw[0]
         y = index_tip_raw[1]
         z = index_tip_raw[2] if len(index_tip_raw) > 2 else 0
         
-        # Create filter if not exists
         if label not in self.filters:
-            self.filters[label] = PointFilter(min_cutoff=1.0, beta=5.0)
+            self.filters[label] = PointFilter(min_cutoff=0.5, beta=10.0) # Consistent with init
 
-        # OPTIMIZED: Full 3D filtering
         fx, fy, fz = self.filters[label].filter3d(x, y, z, time.time())
         return (fx, fy, fz)
+
+    # ... find_hands ...
+
+    def detect_gestures(self, landmarks, label="Right"):
+        """
+        Detects pinches with Hysteresis (Sticky Thresholds).
+        Returns: {finger: (bool, cx, cy)}
+        """
+        gestures = {
+            'index': (False, 0, 0),
+            'middle': (False, 0, 0),
+            'ring': (False, 0, 0),
+            'pinky': (False, 0, 0)
+        }
+        
+        if not landmarks or len(landmarks) < 21:
+            return gestures
+
+        thumb_tip = landmarks[4]
+        x1, y1 = thumb_tip[1], thumb_tip[2]
+        z1 = thumb_tip[3] if len(thumb_tip) > 3 else 0
+
+        fingers = {
+            'index': 8,
+            'middle': 12,
+            'ring': 16,
+            'pinky': 20
+        }
+        
+        # Ensure state entry exists
+        if label not in self.pinch_states:
+            self.pinch_states[label] = {f: False for f in fingers}
+
+        for name, tip_id in fingers.items():
+            finger_tip = landmarks[tip_id]
+            x2, y2 = finger_tip[1], finger_tip[2]
+            z2 = finger_tip[3] if len(finger_tip) > 3 else 0
+            
+            # 3D Euclidean distance
+            z_scale = 100
+            length_3d = math.sqrt((x2 - x1)**2 + (y2 - y1)**2 + ((z2 - z1) * z_scale)**2)
+            
+            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+            
+            # HYSTERESIS LOGIC
+            # Start pinching if VERY close (< 40)
+            # Stop pinching only if moved FAR away (> 60)
+            currently_pinching = self.pinch_states[label][name]
+            
+            if currently_pinching:
+                # Release threshold (higher)
+                if length_3d > 60:
+                    self.pinch_states[label][name] = False
+            else:
+                # Trigger threshold (lower)
+                if length_3d < 40:
+                    self.pinch_states[label][name] = True
+            
+            is_active = self.pinch_states[label][name]
+            
+            if is_active:
+                gestures[name] = (True, cx, cy)
+            
+        return gestures
 
     def find_hands(self, img, draw=True):
         import time

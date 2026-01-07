@@ -107,7 +107,7 @@ def main():
         for hand in hands_data:
             label = hand['label']
             landmarks = hand['landmarks']
-            gestures = base_tracker.detect_gestures(landmarks)
+            gestures = base_tracker.detect_gestures(landmarks, label)
             
             # --- RIGHT HAND (Drawing) ---
             if label == "Right":
