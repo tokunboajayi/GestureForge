@@ -101,6 +101,9 @@ def main():
         
         curr_time = time.time()
         
+        # FLAG: Track if any hand is currently dragging in this frame
+        frame_is_dragging = False
+        
         # TWO-HAND SQUEEZE DETECTION FOR GENESIS
         left_pinching = False
         right_pinching = False
@@ -147,6 +150,7 @@ def main():
                 elif gestures['middle'][0]: # Erase OR Drag (if Viewing)
                     # if VIEWING, use Middle for Dragging 3D Model
                     if renderer.genesis_state == "VIEWING":
+                        frame_is_dragging = True # MARK DRAG ACTIVE
                         # ENABLE RIGHT HAND DRAG
                         l_mid = landmarks[12]
                         curr_drag = (l_mid[1], l_mid[2])
@@ -172,9 +176,6 @@ def main():
                         last_draw_pos = curr_pos
                 else:
                     # Not pinching: Stop Dragging / Erasing
-                    if renderer.genesis_dragging and label == "Right":
-                         renderer.genesis_dragging = False
-                         
                     last_draw_pos = None
 
             # --- LEFT HAND (Navigation & Aux) ---
@@ -217,6 +218,7 @@ def main():
                 
                 # DRAG & DROP: Middle pinch to move 3D model
                 if gestures['middle'][0] and renderer.genesis_state == "VIEWING":
+                    frame_is_dragging = True # MARK DRAG ACTIVE
                     l_mid = landmarks[12]  # Middle fingertip
                     curr_drag = (l_mid[1], l_mid[2])
                     
@@ -232,8 +234,7 @@ def main():
                         renderer.genesis_position[1] += dy
                         
                         renderer._last_drag_pos = curr_drag
-                else:
-                    renderer.genesis_dragging = False
+                # No else block needed for clearing dragging here, handled at end of frame
 
                 # 2. Cycle Color (Ring Pinch)
                 if gestures['ring'][0]:
@@ -276,6 +277,10 @@ def main():
             # Track right hand pinching for two-hand detection
             if label == "Right" and gestures['index'][0]:
                 right_pinching = True
+
+        # RESET DRAGGING: If no hand is dragging this frame, reset the state
+        if not frame_is_dragging:
+            renderer.genesis_dragging = False
 
         # TWO-HAND SQUEEZE -> TRIGGER GENESIS OR SCALE!
         if left_pinching and right_pinching:
