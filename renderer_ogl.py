@@ -148,7 +148,7 @@ class OpenGLRenderer:
         self.genesis_dragging = False  # Is user currently dragging?
         
         # LARGER VOXELS: Increased point size for drawing and genesis
-        self.voxel_point_size = 16  # Size of voxel cubes (increased from 12)
+        self.voxel_point_size = 12  # Size of voxel cubes (reduced from 16)
         
         # SCANNER: Animated scanning plane (ported from ns-arc)
         self.genesis_scanner_y = 0.0  # Scanner Y position (oscillates)
@@ -851,9 +851,9 @@ class OpenGLRenderer:
                 center_y = (min_y + max_y) / 2
                 
                 # SHAPE-AWARE: Use separate radii for X and Y to match aspect ratio
-                radius_x = (max_x - min_x) / 2 * 0.9  # 90% of bounding box
-                radius_y = (max_y - min_y) / 2 * 0.9
-                radius_z = min(radius_x, radius_y) * 0.6  # Z-depth proportional
+                radius_x = (max_x - min_x) / 2 * 0.7  # Reduced scale (was 0.9)
+                radius_y = (max_y - min_y) / 2 * 0.7
+                radius_z = min(radius_x, radius_y) * 0.5  # Z-depth proportional
                 
                 # EMINENT-SCALE: Maximum particle count for ultra-dense solid appearance
                 num_solid_particles = 2500  # Dense fill (eminent scale)
