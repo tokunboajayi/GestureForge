@@ -144,17 +144,37 @@ def main():
                     renderer.add_stroke(last_draw_pos, curr_pos)
                     last_draw_pos = curr_pos
                     
-                elif gestures['middle'][0]: # Erase
-                    is_pinching = True # Show Cursor
-                    renderer.is_eraser = True
-                    
-                    if last_draw_pos is None:
-                        last_draw_pos = curr_pos
+                elif gestures['middle'][0]: # Erase OR Drag (if Viewing)
+                    # if VIEWING, use Middle for Dragging 3D Model
+                    if renderer.genesis_state == "VIEWING":
+                        # ENABLE RIGHT HAND DRAG
+                        l_mid = landmarks[12]
+                        curr_drag = (l_mid[1], l_mid[2])
                         
-                    renderer.add_stroke(last_draw_pos, curr_pos)
-                    last_draw_pos = curr_pos
+                        if not renderer.genesis_dragging:
+                            renderer.genesis_dragging = True
+                            renderer._last_drag_pos = curr_drag
+                        else:
+                            dx = (curr_drag[0] - renderer._last_drag_pos[0]) * 0.01
+                            dy = -(curr_drag[1] - renderer._last_drag_pos[1]) * 0.01
+                            renderer.genesis_position[0] += dx
+                            renderer.genesis_position[1] += dy
+                            renderer._last_drag_pos = curr_drag
+                    else:
+                        # Normal Eraser
+                        is_pinching = True # Show Cursor
+                        renderer.is_eraser = True
+                        
+                        if last_draw_pos is None:
+                            last_draw_pos = curr_pos
+                            
+                        renderer.add_stroke(last_draw_pos, curr_pos)
+                        last_draw_pos = curr_pos
                 else:
-                    # Not pinching
+                    # Not pinching: Stop Dragging / Erasing
+                    if renderer.genesis_dragging and label == "Right":
+                         renderer.genesis_dragging = False
+                         
                     last_draw_pos = None
 
             # --- LEFT HAND (Navigation & Aux) ---
