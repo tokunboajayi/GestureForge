@@ -243,7 +243,7 @@ def main():
                     
                     if last_zoom_pos is not None:
                         dy = (curr_zoom - last_zoom_pos) * (8.0 / height) # Scale
-                        renderer.cam_pos[2] += dy * 2.0 # Zoom Speed
+                        renderer.target_zoom += dy * 2.0 # Zoom Speed (affects target)
                         
                     last_zoom_pos = curr_zoom
                 else:
