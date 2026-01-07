@@ -184,9 +184,9 @@ def main():
                             renderer.genesis_velocity[0] = rotation_x
                             renderer.genesis_velocity[1] = rotation_y
                         else:
-                            # Normal pan behavior
-                            renderer.cam_pos[0] -= dx * 1.5
-                            renderer.cam_pos[1] -= dy * 1.5
+                            # Normal pan behavior (Smooth)
+                            renderer.target_cam_pos[0] -= dx * 1.5
+                            renderer.target_cam_pos[1] -= dy * 1.5
                         
                     last_pan_pos = curr_pan
                 else:
@@ -243,7 +243,7 @@ def main():
                     
                     if last_zoom_pos is not None:
                         dy = (curr_zoom - last_zoom_pos) * (8.0 / height) # Scale
-                        renderer.cam_pos[2] += dy * 2.0 # Zoom Speed
+                        renderer.target_cam_pos[2] += dy * 2.0 # Smooth Zoom Speed
                         
                     last_zoom_pos = curr_zoom
                 else:
@@ -290,10 +290,8 @@ def main():
                         # EMINENT-SCALE: Scale Genesis Model
                         renderer.genesis_scale = max(0.5, min(3.0, renderer.genesis_scale + delta * 0.005))
                     else:
-                        # CAMERA ZOOM: Infinite Canvas
-                        # Pull apart (positive delta) -> Zoom IN (camera moves closer/forward)
-                        # Push together (negative delta) -> Zoom OUT (camera moves back)
-                        renderer.cam_pos[2] += delta * 1.5
+                        # CAMERA ZOOM: Infinite Canvas (Smooth)
+                        renderer.target_cam_pos[2] += delta * 1.5
                     
                     renderer.last_pinch_dist = dist
 

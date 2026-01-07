@@ -95,6 +95,8 @@ class OpenGLRenderer:
         
         # Navigation (Infinite Canvas)
         self.cam_pos = [0.0, 0.0, 0.0] # X, Y, Z
+        self.target_cam_pos = [0.0, 0.0, 0.0] # Smooth Zoom Target
+        self.cam_zoom_speed = 0.1 # Interpolation factor
         
         # OPTIMUS: Pre-computed Tesseract Geometry (save per-frame recalc)
         self.base_corners = np.array([
@@ -245,7 +247,7 @@ class OpenGLRenderer:
             self.add_voxel(x, y, z)
 
     def add_voxel(self, x=0, y=0, z=0, color=None, generated_x=None, generated_y=None):
-        # Alias
+        """Add a voxel to the world using Spatial Hashing (Chunks)."""
         if generated_x is not None: x = generated_x
         if generated_y is not None: y = generated_y
         
@@ -271,9 +273,20 @@ class OpenGLRenderer:
         
         if color is None: color = self.current_color
         
-        key = (sx, sy, sz)
-        if key not in self.voxels:
-            self.voxels[key] = color
+        # SPATIAL HASHING: Determine Chunk ID
+        chunk_x = int(sx // self.chunk_size)
+        chunk_y = int(sy // self.chunk_size)
+        chunk_z = int(sz // self.chunk_size)
+        chunk_key = (chunk_x, chunk_y, chunk_z)
+        
+        if chunk_key not in self.chunks:
+            self.chunks[chunk_key] = {}
+            
+        voxel_key = (sx, sy, sz)
+        
+        if voxel_key not in self.chunks[chunk_key]:
+            self.chunks[chunk_key][voxel_key] = color
+            self.voxels_count += 1
             self.cache_valid = False
 
     def remove_voxel(self, x, y, z=0):
@@ -290,10 +303,22 @@ class OpenGLRenderer:
         sy = round(world_y / grid_size) * grid_size
         sz = round(world_z / grid_size) * grid_size
         
-        key = (sx, sy, sz)
-        if key in self.voxels:
-            del self.voxels[key]
-            self.cache_valid = False
+        chunk_x = int(sx // self.chunk_size)
+        chunk_y = int(sy // self.chunk_size)
+        chunk_z = int(sz // self.chunk_size)
+        chunk_key = (chunk_x, chunk_y, chunk_z)
+        
+        voxel_key = (sx, sy, sz)
+        
+        if chunk_key in self.chunks:
+            if voxel_key in self.chunks[chunk_key]:
+                del self.chunks[chunk_key][voxel_key]
+                self.voxels_count -= 1
+                self.cache_valid = False
+                
+                # Prune empty chunks
+                if not self.chunks[chunk_key]:
+                    del self.chunks[chunk_key]
 
     def rebuild_arrays(self):
         # ... preserved ...
@@ -307,15 +332,22 @@ class OpenGLRenderer:
 # I need to update `draw` too. separate chunk.
             
     def rebuild_arrays(self):
-        if not self.voxels:
+        """OPTIMUS: Flatten chunked voxel data into numpy arrays for VBO."""
+        if self.voxels_count == 0:
             self.pos_array = np.empty((0, 3), dtype=np.float32)
             self.col_array = np.empty((0, 3), dtype=np.float32)
         else:
-            # Keys to list
-            keys = list(self.voxels.keys())
-            cols = list(self.voxels.values())
-            self.pos_array = np.array(keys, dtype=np.float32)
-            self.col_array = np.array(cols, dtype=np.float32)
+            # Flatten all chunks
+            # TODO: Future optimization - only flatten visible chunks
+            all_keys = []
+            all_cols = []
+            
+            for chunk_key, voxels in self.chunks.items():
+                all_keys.extend(voxels.keys())
+                all_cols.extend(voxels.values())
+            
+            self.pos_array = np.array(all_keys, dtype=np.float32)
+            self.col_array = np.array(all_cols, dtype=np.float32)
         
         self.cache_valid = True
     
@@ -377,7 +409,17 @@ class OpenGLRenderer:
         glMatrixMode(GL_MODELVIEW)
         glEnable(GL_DEPTH_TEST)
 
+    def update_camera_smooth(self):
+        """EMINENT-SCALE: Smooth camera interpolation toward target position."""
+        # Lerp: current = current + (target - current) * speed
+        self.cam_pos[0] += (self.target_cam_pos[0] - self.cam_pos[0]) * self.cam_zoom_speed
+        self.cam_pos[1] += (self.target_cam_pos[1] - self.cam_pos[1]) * self.cam_zoom_speed
+        self.cam_pos[2] += (self.target_cam_pos[2] - self.cam_pos[2]) * self.cam_zoom_speed
+
     def draw(self, frame, tracking_pos=None, is_pinching=False, landmarks_list=None, fps=0.0):
+        # Update Camera Physics
+        self.update_camera_smooth()
+        
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
         
@@ -495,7 +537,9 @@ class OpenGLRenderer:
             glPopMatrix()
         
         # 4. HUD Overlay (FPS, Voxels, Toast)
-        self.draw_hud(fps, len(self.voxels))
+        # RECORDING UPGRADE: Hide HUD for clean exports
+        if not self.is_recording:
+            self.draw_hud(fps, self.voxels_count)
 
         pygame.display.flip()
     
@@ -818,16 +862,17 @@ class OpenGLRenderer:
         print(f"[GENESIS] start_genesis called. Current state: {self.genesis_state}")
         
         if self.genesis_state != "DRAW":
-            self.show_toast("Already in Genesis mode!")
-            print(f"[GENESIS] Blocked - not in DRAW state")
+            print(f"[GENESIS] Resetting genesis state to DRAW")
+            self.genesis_state = "DRAW"
+            self.genesis_scale = 1.0
             return
             
-        if len(self.voxels) == 0:
+        if self.voxels_count == 0:
             self.show_toast("Draw something first!")
             print(f"[GENESIS] Blocked - no voxels")
             return
         
-        print(f"[GENESIS] Starting with {len(self.voxels)} voxels")
+        print(f"[GENESIS] Starting with {self.voxels_count} voxels")
         
         # Export current canvas
         sketch_path = self.export_sketch()
