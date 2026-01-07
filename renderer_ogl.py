@@ -862,20 +862,33 @@ class OpenGLRenderer:
                 num_solid_particles = 2500  # Dense fill (eminent scale)
                 solid_vertices = []
                 
-                # Generate evenly distributed points in ELLIPSOID (shape-aware)
+                # SILHOUETTE MORPH: Sample points based on the actual drawing structure
+                # This ensures "Star" = "3D Star", not "Ellipsoid"
+                
+                # Pre-calculate sampling parameters
+                std_dev_x = radius_x * 0.4
+                std_dev_y = radius_y * 0.4
+                depth_thickness = radius_z * 1.5
+                
                 for _ in range(num_solid_particles):
-                    # Random point in ellipsoid using rejection sampling
-                    while True:
-                        x = np.random.uniform(-1, 1)
-                        y = np.random.uniform(-1, 1)
-                        z = np.random.uniform(-1, 1)
-                        if x*x + y*y + z*z <= 1:  # Inside unit sphere
-                            break
+                    # 1. Pick a random voxel from the user's drawing (The "Skeleton")
+                    idx = np.random.randint(0, num_voxels)
+                    base_point = target_vertices[idx]
                     
-                    # SHAPE-AWARE: Scale by individual axis radii
-                    px = center_x + x * radius_x
-                    py = center_y + y * radius_y
-                    pz = z * radius_z  # Full Z-depth for 3D look
+                    # 2. Add Gaussian jitter to fill the volume around the skeleton
+                    # This creates a "puffy" version of the lines drawn
+                    jx = np.random.normal(0, min(5, radius_x * 0.1)) # Small jitter X
+                    jy = np.random.normal(0, min(5, radius_y * 0.1)) # Small jitter Y
+                    
+                    # 3. Calculate Z-depth (Puffiness)
+                    # Distribution centered at 0, tapering off at edges
+                    jz = np.random.normal(0, depth_thickness * 0.5)
+                    
+                    # 4. Final Position
+                    px = base_point[0] + jx
+                    py = base_point[1] + jy
+                    pz = jz
+                    
                     solid_vertices.append([px, py, pz])
                 
                 self.genesis_target_vertices = np.array(solid_vertices, dtype=np.float32)
