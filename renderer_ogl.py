@@ -143,6 +143,13 @@ class OpenGLRenderer:
         # EMINENT-SCALE: Two-hand scaling
         self.genesis_scale = 1.0  # Model scale factor (two-hand pinch to resize)
         
+        # DRAG & DROP: Position of the 3D model
+        self.genesis_position = [0.0, 0.0, 0.0]  # X, Y, Z position offset
+        self.genesis_dragging = False  # Is user currently dragging?
+        
+        # LARGER VOXELS: Increased point size for drawing and genesis
+        self.voxel_point_size = 16  # Size of voxel cubes (increased from 12)
+        
         # SCANNER: Animated scanning plane (ported from ns-arc)
         self.genesis_scanner_y = 0.0  # Scanner Y position (oscillates)
         
@@ -699,6 +706,9 @@ class OpenGLRenderer:
         # Push a fresh matrix for genesis rendering
         glPushMatrix()
         
+        # DRAG & DROP: Apply position offset
+        glTranslatef(self.genesis_position[0], self.genesis_position[1], self.genesis_position[2])
+        
         # EMINENT-SCALE: Apply two-hand scaling
         glScalef(self.genesis_scale, self.genesis_scale, self.genesis_scale)
         
@@ -711,8 +721,8 @@ class OpenGLRenderer:
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         
-        # OPTIMIZATION: Larger, more visible points with smooth rendering
-        glPointSize(12)  # Dense solid appearance
+        # LARGER VOXELS: Use configured point size
+        glPointSize(self.voxel_point_size)
         glEnable(GL_POINT_SMOOTH)
         glHint(GL_POINT_SMOOTH_HINT, GL_NICEST)
         

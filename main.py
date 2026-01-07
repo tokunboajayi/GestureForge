@@ -194,6 +194,26 @@ def main():
                     if renderer.genesis_grabbed:
                         renderer.genesis_grabbed = False
                     last_pan_pos = None
+                
+                # DRAG & DROP: Middle pinch to move 3D model
+                if gestures['middle'][0] and renderer.genesis_state == "VIEWING":
+                    l_mid = landmarks[12]  # Middle fingertip
+                    curr_drag = (l_mid[1], l_mid[2])
+                    
+                    if not renderer.genesis_dragging:
+                        renderer.genesis_dragging = True
+                        renderer._last_drag_pos = curr_drag
+                    else:
+                        dx = (curr_drag[0] - renderer._last_drag_pos[0]) * 0.01
+                        dy = -(curr_drag[1] - renderer._last_drag_pos[1]) * 0.01
+                        
+                        # Move genesis model position
+                        renderer.genesis_position[0] += dx
+                        renderer.genesis_position[1] += dy
+                        
+                        renderer._last_drag_pos = curr_drag
+                else:
+                    renderer.genesis_dragging = False
 
                 # 2. Cycle Color (Ring Pinch)
                 if gestures['ring'][0]:
