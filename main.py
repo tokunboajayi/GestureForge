@@ -101,9 +101,6 @@ def main():
         
         curr_time = time.time()
         
-        # FLAG: Track if any hand is currently dragging in this frame
-        frame_is_dragging = False
-        
         # TWO-HAND SQUEEZE DETECTION FOR GENESIS
         left_pinching = False
         right_pinching = False
@@ -147,35 +144,17 @@ def main():
                     renderer.add_stroke(last_draw_pos, curr_pos)
                     last_draw_pos = curr_pos
                     
-                elif gestures['middle'][0]: # Erase OR Drag (if Viewing)
-                    # if VIEWING, use Middle for Dragging 3D Model
-                    if renderer.genesis_state == "VIEWING":
-                        frame_is_dragging = True # MARK DRAG ACTIVE
-                        # ENABLE RIGHT HAND DRAG
-                        l_mid = landmarks[12]
-                        curr_drag = (l_mid[1], l_mid[2])
-                        
-                        if not renderer.genesis_dragging:
-                            renderer.genesis_dragging = True
-                            renderer._last_drag_pos = curr_drag
-                        else:
-                            dx = (curr_drag[0] - renderer._last_drag_pos[0]) * 0.01
-                            dy = -(curr_drag[1] - renderer._last_drag_pos[1]) * 0.01
-                            renderer.genesis_position[0] += dx
-                            renderer.genesis_position[1] += dy
-                            renderer._last_drag_pos = curr_drag
-                    else:
-                        # Normal Eraser
-                        is_pinching = True # Show Cursor
-                        renderer.is_eraser = True
-                        
-                        if last_draw_pos is None:
-                            last_draw_pos = curr_pos
-                            
-                        renderer.add_stroke(last_draw_pos, curr_pos)
+                elif gestures['middle'][0]: # Erase
+                    is_pinching = True # Show Cursor
+                    renderer.is_eraser = True
+                    
+                    if last_draw_pos is None:
                         last_draw_pos = curr_pos
+                        
+                    renderer.add_stroke(last_draw_pos, curr_pos)
+                    last_draw_pos = curr_pos
                 else:
-                    # Not pinching: Stop Dragging / Erasing
+                    # Not pinching
                     last_draw_pos = None
 
             # --- LEFT HAND (Navigation & Aux) ---
@@ -218,7 +197,6 @@ def main():
                 
                 # DRAG & DROP: Middle pinch to move 3D model
                 if gestures['middle'][0] and renderer.genesis_state == "VIEWING":
-                    frame_is_dragging = True # MARK DRAG ACTIVE
                     l_mid = landmarks[12]  # Middle fingertip
                     curr_drag = (l_mid[1], l_mid[2])
                     
@@ -234,7 +212,8 @@ def main():
                         renderer.genesis_position[1] += dy
                         
                         renderer._last_drag_pos = curr_drag
-                # No else block needed for clearing dragging here, handled at end of frame
+                else:
+                    renderer.genesis_dragging = False
 
                 # 2. Cycle Color (Ring Pinch)
                 if gestures['ring'][0]:
@@ -264,7 +243,7 @@ def main():
                     
                     if last_zoom_pos is not None:
                         dy = (curr_zoom - last_zoom_pos) * (8.0 / height) # Scale
-                        renderer.target_zoom += dy * 2.0 # Zoom Speed (affects target)
+                        renderer.cam_pos[2] += dy * 2.0 # Zoom Speed
                         
                     last_zoom_pos = curr_zoom
                 else:
@@ -278,27 +257,61 @@ def main():
             if label == "Right" and gestures['index'][0]:
                 right_pinching = True
 
-        # RESET DRAGGING: If no hand is dragging this frame, reset the state
-        if not frame_is_dragging:
-            renderer.genesis_dragging = False
-
-        # TWO-HAND SQUEEZE -> TRIGGER GENESIS OR SCALE!
+        # TWO-HAND GESTURES: ZOOM & SCALE
         if left_pinching and right_pinching:
-            if renderer.genesis_state == "VIEWING":
-                # EMINENT-SCALE: Two-hand scale gesture
-                # Track distance between hands for scaling
-                if 'left_idx_pos' in dir() and 'right_idx_pos' in dir():
-                    pass  # Already tracked
-                # For now, simple scale pulse on two-hand pinch
-                renderer.genesis_scale = min(2.0, renderer.genesis_scale + 0.02)
-            elif (curr_time - last_genesis_time > 2.0):
-                print("[GENESIS] TWO-HAND SQUEEZE DETECTED!")
-                renderer.start_genesis()
-                last_genesis_time = curr_time
+            # We have both hands pinching!
+            # Calculate distance between pinch points (using index finger tips as proxy)
+            # Need to get positions again as they are in local scope
+            l_pos = None
+            r_pos = None
+            
+            for hand in hands_data:
+                if hand['label'] == "Left":
+                    l_pos = hand['landmarks'][8] # Index tip
+                elif hand['label'] == "Right":
+                    r_pos = hand['landmarks'][8] # Index tip
+            
+            if l_pos is not None and r_pos is not None:
+                # Calculate Euclidean distance between hands
+                dx = l_pos[0] - r_pos[0]
+                dy = l_pos[1] - r_pos[1]
+                dist = (dx*dx + dy*dy)**0.5
+                
+                # FIRST FRAME of pinch
+                if not renderer.is_two_hand_pinching:
+                    renderer.is_two_hand_pinching = True
+                    renderer.last_pinch_dist = dist
+                    renderer.pinch_start_time = curr_time
+                else:
+                    # CONTINUOUS pinch
+                    delta = dist - renderer.last_pinch_dist
+                    
+                    if renderer.genesis_state == "VIEWING":
+                        # EMINENT-SCALE: Scale Genesis Model
+                        renderer.genesis_scale = max(0.5, min(3.0, renderer.genesis_scale + delta * 0.005))
+                    else:
+                        # CAMERA ZOOM: Infinite Canvas
+                        # Pull apart (positive delta) -> Zoom IN (camera moves closer/forward)
+                        # Push together (negative delta) -> Zoom OUT (camera moves back)
+                        renderer.cam_pos[2] += delta * 1.5
+                    
+                    renderer.last_pinch_dist = dist
+
         else:
-            # Slowly return to base scale when not scaling
+            # RESET pinch state
+            if renderer.is_two_hand_pinching:
+                renderer.is_two_hand_pinching = False
+                
+                # If short duration, treat as TRIGGER (Genesis)
+                if (curr_time - renderer.pinch_start_time < 0.5) and (curr_time - last_genesis_time > 2.0):
+                     if renderer.genesis_state != "VIEWING":
+                        print("[GENESIS] TWO-HAND SQUEEZE DETECTED! (Triggered)")
+                        renderer.start_genesis()
+                        last_genesis_time = curr_time
+            
+            # Slowly return to base scale when not scaling (only for Genesis)
             if renderer.genesis_state == "VIEWING" and renderer.genesis_scale > 1.0:
-                renderer.genesis_scale = max(1.0, renderer.genesis_scale - 0.01)
+                 renderer.genesis_scale = max(1.0, renderer.genesis_scale - 0.01)
 
         # D. Render
         renderer.update_camera_frame(frame)

@@ -64,12 +64,6 @@ class OpenGLRenderer:
             4, 7, 1, 1, 0, 4  # Bottom
         ], dtype=np.uint32)
         
-        # Camera State (3rd Person View)
-        # Position: X (Pan), Y (Pan/Height), Z (Zoom)
-        self.cam_pos = [0, 0, -20.0]
-        self.target_zoom = -20.0  # SMOOTH ZOOM: Target Z position
-        self.cam_rot = [30, 45]  # Pitch, Yaw
-        
         # Shader Setup (Simple Pipeline)
         self.shader = self.create_shader()
         
@@ -148,6 +142,9 @@ class OpenGLRenderer:
         
         # EMINENT-SCALE: Two-hand scaling
         self.genesis_scale = 1.0  # Model scale factor (two-hand pinch to resize)
+        self.is_two_hand_pinching = False
+        self.last_pinch_dist = 0.0
+        self.pinch_start_time = 0.0
         
         # DRAG & DROP: Position of the 3D model
         self.genesis_position = [0.0, 0.0, 0.0]  # X, Y, Z position offset
@@ -178,9 +175,6 @@ class OpenGLRenderer:
     # Let's do `__init__` first. 
 
     def update_camera_frame(self, frame):
-        """Update texture with new camera frame."""
-        # SMOOTH ZOOM: Interpolate camera Z position
-        self.cam_pos[2] += (self.target_zoom - self.cam_pos[2]) * 0.1
         # Frame is BGR from OpenCV, convert to RGB
         # Also need to flip it vertically for OpenGL Texture usually
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -507,10 +501,6 @@ class OpenGLRenderer:
     
     def draw_hud(self, fps, voxel_count):
         """Render FPS counter and toast notifications."""
-        # RECORDING UPGRADE: Skip HUD if recording for clean export
-        if self.is_recording:
-             return
-
         # FPS Counter
         fps_text = f"FPS: {int(fps)} | Voxels: {voxel_count}"
         text_surface = self.pygame_font.render(fps_text, True, (0, 255, 255))
@@ -916,40 +906,6 @@ class OpenGLRenderer:
         self.genesis_target_vertices = None
         self.genesis_rotation = [0.0, 0.0, 0.0]
         self.show_toast("Genesis Reset. Draw again!")
-
-    def save_world(self):
-        """Save current voxels to JSON file."""
-        import json
-        data = {
-            "voxels": self.voxels,
-            "version": "1.0"
-        }
-        try:
-            with open("world.json", "w") as f:
-                json.dump(data, f)
-            print("World saved to world.json")
-        except Exception as e:
-            print(f"Error saving world: {e}")
-
-    def load_world(self):
-        """Load voxels from JSON file."""
-        import json
-        try:
-            if not os.path.exists("world.json"):
-                self.show_toast("No save file found!")
-                return
-                
-            with open("world.json", "r") as f:
-                data = json.load(f)
-                
-            if "voxels" in data:
-                self.voxels = data["voxels"]
-                self.pos_array = np.array([v[0] for v in self.voxels], dtype=np.float32)
-                self.color_array = np.array([v[1] for v in self.voxels], dtype=np.float32)
-                self.update_vbo()
-                print("World loaded from world.json")
-        except Exception as e:
-            print(f"Error loading world: {e}")
 
     def check_events(self):
         for event in pygame.event.get():
