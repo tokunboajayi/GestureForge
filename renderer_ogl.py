@@ -659,11 +659,7 @@ class OpenGLRenderer:
                 
                 # Store hitbox for interaction
                 self.palette_boxes.append(((bx, by, box_size, box_size), i))
-            glEnd()
-            
-            glDeleteTextures([toast_tex])
         
-        glDisable(GL_TEXTURE_2D)
         glPopMatrix()
         glMatrixMode(GL_PROJECTION)
         glPopMatrix()
