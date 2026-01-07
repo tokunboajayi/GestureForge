@@ -68,15 +68,22 @@ class OpenGLRenderer:
         self.shader = self.create_shader()
         
         # Colors
+        # Colors (Cyberpunk Palette)
         self.colors = [
-            (0, 1, 1),   # Cyan
-            (1, 0, 1),   # Magenta
-            (0, 1, 0),   # Green
-            (1, 0.5, 0), # Orange
-            (1, 1, 1)    # White
+            (0, 1, 1),    # Cyan
+            (1, 0, 1),    # Magenta
+            (0, 1, 0),    # Green
+            (1, 0.5, 0),  # Orange
+            (1, 1, 1),    # White
+            (1, 0, 0),    # Red
+            (0, 0, 1),    # Blue
+            (1, 1, 0),    # Yellow
+            (0.5, 0, 1)   # Purple
         ]
         self.color_idx = 0
         self.current_color = self.colors[0]
+        self.palette_boxes = [] # [(rect, color_idx), ...] for UI hit testing
+        self.show_palette = True
         self.is_eraser = False
 
         # Texture ID for Background
@@ -160,6 +167,10 @@ class OpenGLRenderer:
         
         self.exports_dir = "exports"
         os.makedirs(self.exports_dir, exist_ok=True)
+        
+        # SAVE/LOAD SYSTEM
+        self.worlds_dir = "worlds"
+        os.makedirs(self.worlds_dir, exist_ok=True)
 
     def create_shader(self):
         return None 
@@ -610,6 +621,47 @@ class OpenGLRenderer:
             glEnd()
             
             glDeleteTextures([toast_tex])
+
+        glDisable(GL_TEXTURE_2D)
+        
+        # DRAW PALETTE UI
+        if self.show_palette:
+            self.palette_boxes = []
+            box_size = 40
+            padding = 10
+            total_w = len(self.colors) * (box_size + padding)
+            start_x = (self.width - total_w) / 2
+            start_y = self.height - 100
+            
+            for i, color in enumerate(self.colors):
+                bx = start_x + i * (box_size + padding)
+                by = start_y
+                
+                # Highlight selection (White Border)
+                if i == self.color_idx:
+                    glColor4f(1, 1, 1, 1) 
+                    # Draw a slightly larger quad as border
+                    glBegin(GL_QUADS)
+                    glVertex2f(bx - 3, by - 3)
+                    glVertex2f(bx + box_size + 3, by - 3)
+                    glVertex2f(bx + box_size + 3, by + box_size + 3)
+                    glVertex2f(bx - 3, by + box_size + 3)
+                    glEnd()
+                
+                # Color Box
+                glColor4f(color[0], color[1], color[2], 1.0)
+                glBegin(GL_QUADS)
+                glVertex2f(bx, by)
+                glVertex2f(bx + box_size, by)
+                glVertex2f(bx + box_size, by + box_size)
+                glVertex2f(bx, by + box_size)
+                glEnd()
+                
+                # Store hitbox for interaction
+                self.palette_boxes.append(((bx, by, box_size, box_size), i))
+            glEnd()
+            
+            glDeleteTextures([toast_tex])
         
         glDisable(GL_TEXTURE_2D)
         glPopMatrix()
@@ -644,6 +696,17 @@ class OpenGLRenderer:
             self.is_recording = True
             self.show_toast("Recording Started... (Press R to stop)")
     
+    def check_ui_hit(self, x, y):
+        """Phase 3: Check if screen coordinate hits a UI element (Palette)."""
+        if not self.show_palette: return False
+        
+        for (bx, by, bw, bh), color_index in self.palette_boxes:
+            if bx <= x <= bx + bw and by <= y <= by + bh:
+                self.color_idx = color_index
+                self.current_color = self.colors[self.color_idx]
+                return True
+        return False
+        
     def export_recording(self):
         """OPTIMUS: Export captured frames as animated GIF."""
         if not self.recording_frames:
@@ -664,6 +727,81 @@ class OpenGLRenderer:
         for frame in frames_bgr:
             out.write(frame)
         out.release()
+        
+        print(f"Recording saved to: {filename_mp4}")
+        
+    def save_world(self):
+        """Phase 3: Save current voxel world to JSON."""
+        filepath = os.path.join(self.worlds_dir, "world_latest.json")
+        
+        # Serialize Chunks: Convert tuple keys to strings
+        serialized_chunks = {}
+        for c_key, voxels in self.chunks.items():
+            s_c_key = f"{c_key[0]},{c_key[1]},{c_key[2]}"
+            s_voxels = {}
+            for v_key, color in voxels.items():
+                s_v_key = f"{v_key[0]},{v_key[1]},{v_key[2]}"
+                s_voxels[s_v_key] = color
+            serialized_chunks[s_c_key] = s_voxels
+            
+        data = {
+            "version": "1.0",
+            "timestamp": datetime.now().isoformat(),
+            "cam_pos": self.cam_pos,
+            "target_cam_pos": self.target_cam_pos,
+            "chunks": serialized_chunks
+        }
+        
+        try:
+            with open(filepath, 'w') as f:
+                json.dump(data, f)
+            self.show_toast("World Saved!")
+            print(f"[SYSTEM] World saved to {filepath}")
+        except Exception as e:
+            print(f"[ERROR] Failed to save world: {e}")
+            self.show_toast("Save Failed!")
+
+    def load_world(self):
+        """Phase 3: Load voxel world from JSON."""
+        filepath = os.path.join(self.worlds_dir, "world_latest.json")
+        
+        if not os.path.exists(filepath):
+            self.show_toast("No Saved World Found!")
+            return
+            
+        try:
+            with open(filepath, 'r') as f:
+                data = json.load(f)
+                
+            # Restore Camera
+            if "cam_pos" in data: self.cam_pos = data["cam_pos"]
+            if "target_cam_pos" in data: self.target_cam_pos = data["target_cam_pos"]
+            
+            # Restore Chunks
+            self.chunks = {}
+            self.voxels_count = 0
+            
+            for s_c_key, s_voxels in data.get("chunks", {}).items():
+                # Parse Chunk Key
+                parts = s_c_key.split(',')
+                c_key = (int(parts[0]), int(parts[1]), int(parts[2]))
+                
+                self.chunks[c_key] = {}
+                for s_v_key, color in s_voxels.items():
+                    # Parse Voxel Key
+                    v_parts = s_v_key.split(',')
+                    v_key = (float(v_parts[0]), float(v_parts[1]), float(v_parts[2]))
+                    
+                    self.chunks[c_key][v_key] = tuple(color) # Ensure color is tuple
+                    self.voxels_count += 1
+            
+            self.cache_valid = False
+            self.show_toast("World Loaded!")
+            print(f"[SYSTEM] World loaded from {filepath} ({self.voxels_count} voxels)")
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to load world: {e}")
+            self.show_toast("Load Failed!")
         
         print(f"Recording exported to: {filename_mp4}")
         self.recording_frames = []

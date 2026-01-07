@@ -137,12 +137,22 @@ def main():
                     is_pinching = True
                     renderer.is_eraser = False
                     
-                    if last_draw_pos is None:
-                        last_draw_pos = curr_pos
+                    # Phase 3: UI Interaction Check
+                    # Convert tracking center to screen coords equivalent
+                    # Note: tracking_center is (cx, cy) in pixels already? No, mx, my are pixels.
+                    # BaseTracker.get_smooth_pos returns pixels.
                     
-                    # Interpolate Stroke
-                    renderer.add_stroke(last_draw_pos, curr_pos)
-                    last_draw_pos = curr_pos
+                    ui_hit = renderer.check_ui_hit(cx, cy)
+                    
+                    if not ui_hit:
+                        if last_draw_pos is None:
+                            last_draw_pos = curr_pos
+                        
+                        # Interpolate Stroke
+                        renderer.add_stroke(last_draw_pos, curr_pos)
+                        last_draw_pos = curr_pos
+                    else:
+                        last_draw_pos = None # Reset draw if hitting UI
                     
                 elif gestures['middle'][0]: # Erase
                     is_pinching = True # Show Cursor
