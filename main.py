@@ -237,11 +237,23 @@ def main():
             if label == "Right" and gestures['index'][0]:
                 right_pinching = True
 
-        # TWO-HAND SQUEEZE -> TRIGGER GENESIS!
-        if left_pinching and right_pinching and (curr_time - last_genesis_time > 2.0):
-            print("[GENESIS] TWO-HAND SQUEEZE DETECTED!")
-            renderer.start_genesis()
-            last_genesis_time = curr_time
+        # TWO-HAND SQUEEZE -> TRIGGER GENESIS OR SCALE!
+        if left_pinching and right_pinching:
+            if renderer.genesis_state == "VIEWING":
+                # EMINENT-SCALE: Two-hand scale gesture
+                # Track distance between hands for scaling
+                if 'left_idx_pos' in dir() and 'right_idx_pos' in dir():
+                    pass  # Already tracked
+                # For now, simple scale pulse on two-hand pinch
+                renderer.genesis_scale = min(2.0, renderer.genesis_scale + 0.02)
+            elif (curr_time - last_genesis_time > 2.0):
+                print("[GENESIS] TWO-HAND SQUEEZE DETECTED!")
+                renderer.start_genesis()
+                last_genesis_time = curr_time
+        else:
+            # Slowly return to base scale when not scaling
+            if renderer.genesis_state == "VIEWING" and renderer.genesis_scale > 1.0:
+                renderer.genesis_scale = max(1.0, renderer.genesis_scale - 0.01)
 
         # D. Render
         renderer.update_camera_frame(frame)

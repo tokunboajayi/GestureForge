@@ -140,6 +140,9 @@ class OpenGLRenderer:
         self.genesis_sensitivity = 3.0  # Rotation speed multiplier
         self.genesis_glow = 0.0  # Glow intensity (0-1) when grabbed
         
+        # EMINENT-SCALE: Two-hand scaling
+        self.genesis_scale = 1.0  # Model scale factor (two-hand pinch to resize)
+        
         # SCANNER: Animated scanning plane (ported from ns-arc)
         self.genesis_scanner_y = 0.0  # Scanner Y position (oscillates)
         
@@ -645,6 +648,10 @@ class OpenGLRenderer:
                     self.genesis_velocity[0] = 0
                 if abs(self.genesis_velocity[1]) < 0.1:
                     self.genesis_velocity[1] = 0
+                
+                # EMINENT-SCALE: Auto-spin when idle (no velocity)
+                if self.genesis_velocity[0] == 0 and self.genesis_velocity[1] == 0:
+                    self.genesis_rotation[1] += 0.3  # Slow continuous Y rotation
             
             # Update glow effect (fade in/out)
             if self.genesis_grabbed:
@@ -691,6 +698,9 @@ class OpenGLRenderer:
         
         # Push a fresh matrix for genesis rendering
         glPushMatrix()
+        
+        # EMINENT-SCALE: Apply two-hand scaling
+        glScalef(self.genesis_scale, self.genesis_scale, self.genesis_scale)
         
         # Apply rotation transform
         glRotatef(self.genesis_rotation[0], 1, 0, 0)  # X-axis
@@ -835,8 +845,8 @@ class OpenGLRenderer:
                 radius_y = (max_y - min_y) / 2 * 0.9
                 radius_z = min(radius_x, radius_y) * 0.6  # Z-depth proportional
                 
-                # OPTIMIZED: Higher particle count for solid appearance
-                num_solid_particles = 1200  # Dense fill (increased from 800)
+                # EMINENT-SCALE: Maximum particle count for ultra-dense solid appearance
+                num_solid_particles = 2500  # Dense fill (eminent scale)
                 solid_vertices = []
                 
                 # Generate evenly distributed points in ELLIPSOID (shape-aware)
