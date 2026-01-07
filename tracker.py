@@ -61,7 +61,11 @@ class HandTracker:
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_rgb)
         
         # Calculate timestamp (monotonic)
-        self.timestamp_ms = int(time.time() * 1000)
+        # Windows time.time() has low resolution, so we force increment
+        curr_ts = int(time.time() * 1000)
+        if curr_ts <= self.timestamp_ms:
+            curr_ts = self.timestamp_ms + 1
+        self.timestamp_ms = curr_ts
         
         # Detect
         # Note: detect_for_video expects ms timestamp
