@@ -1,10 +1,10 @@
-# NS-Voxel-Py
+# GestureForge
 
 <p align="center">
-  <img src="logo.png" width="200" alt="NS-Voxel Logo">
+  <img src="logo.png" width="200" alt="GestureForge Logo">
 </p>
 
-Hand-tracking voxel painter with AI 3D Genesis. Draw in AR, generate solid 3D shapes with hand gestures.
+**Forge 3D creations with your hands.** Hand-tracking voxel painter with AI 3D Genesis — draw in AR, generate solid 3D shapes with gestures.
 
 ## Features
 
