@@ -814,8 +814,23 @@ class OpenGLRenderer:
         # Lerp factor (how fast particles move toward target)
         lerp_speed = 0.05
         
-        # Move particles toward targets
+        # ADVANCED PHYSICS: Swirl & Noise
+        # 1. Attraction Force
         delta = self.genesis_target_vertices - self.genesis_particles
+        
+        # 2. Add Swirl (Cross product-like motion around Y axis)
+        # Only during morphing for visual flair
+        if self.genesis_state == "MORPHING":
+            t = time.time()
+            # Ripple effect
+            ripple = np.sin(t * 10.0 + self.genesis_particles[:, 0] * 5.0) * 0.01
+            self.genesis_particles[:, 1] += ripple
+            
+            # Random jitter for "Energy"
+            jitter = np.random.normal(0, 0.005, size=self.genesis_particles.shape)
+            self.genesis_particles += jitter
+            
+        # Apply Movement
         self.genesis_particles += delta * lerp_speed
         
         # Check if morph is complete (particles close to targets)
@@ -1042,7 +1057,8 @@ class OpenGLRenderer:
                 radius_z = min(radius_x, radius_y) * 0.5  # Z-depth proportional
                 
                 # EMINENT-SCALE: Maximum particle count for ultra-dense solid appearance
-                num_solid_particles = 2500  # Dense fill (eminent scale)
+                # PHASE 3: Advanced GPU-Ready Physics (10,000 particles)
+                num_solid_particles = 10000 
                 solid_vertices = []
                 
                 # SILHOUETTE MORPH: Sample points based on the actual drawing structure
