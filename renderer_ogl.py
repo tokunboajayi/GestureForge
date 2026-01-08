@@ -439,7 +439,10 @@ class OpenGLRenderer:
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
         
-        # 0. Background (No Fog)
+        # 0. Background (Video Feed)
+        # Fix: Update texture with current frame
+        if frame is not None:
+            self.update_camera_frame(frame)
         self.draw_background()
         
         # 1. World Rendering (With Fog)
